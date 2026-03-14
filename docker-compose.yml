@@ -1,0 +1,71 @@
+version: '3.8'
+
+networks:
+  taskflow-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+
+services:
+
+  # ── MySQL Database ──────────────────────────────────
+  mysql:
+    image: mysql:8
+    container_name: taskflow-mysql
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: taskflow_db
+    volumes:
+      - mysql-data:/var/lib/mysql         # persistent data
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Node.js Backend ─────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskflow-api
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+    environment:
+      DB_HOST:     mysql
+      DB_USER:     root
+      DB_PASSWORD: root123
+      DB_NAME:     taskflow_db
+      PORT:        3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy  
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── React Frontend ───────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow-frontend
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy  
