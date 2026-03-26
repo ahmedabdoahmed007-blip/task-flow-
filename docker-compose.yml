@@ -65,7 +65,7 @@ services:
     networks:
       - taskflow-network
     ports:
-      - "8080:80"
+      - "8888:80"
     depends_on:
       backend:
         condition: service_healthy  
